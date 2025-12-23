@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      VITE_INVENTORY_BASE_URL: https://devices-dev-ao01-func.azurewebsites.net/api
+      VITE_INVENTORY_BASE_URL: https://devices-dev-ao01-func.azurewebsites.net
 
     steps:
       - name: Checkout code
