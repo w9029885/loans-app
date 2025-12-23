@@ -109,7 +109,7 @@ export class HttpInventoryService implements InventoryService {
   ): Promise<AddDeviceOutput> {
     const dto = toUpdateDeviceRequestDto(input);
     const res = await this.http(this.url(`/api/devices/${encodeURIComponent(id)}`), {
-      method: 'PUT',
+      method: 'PATCH',
       headers: this.mergeHeaders({
         Accept: 'application/json',
         'Content-Type': 'application/json',
