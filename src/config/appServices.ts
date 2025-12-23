@@ -81,8 +81,12 @@ export function makeUpdateInventory(): (
 export type InventoryUses = {
   listInventory: () => Promise<ListInventoryResult>;
   addInventory: (command: AddInventoryCommand) => Promise<AddInventoryResult>;
-  deleteInventory: (command: DeleteInventoryCommand) => Promise<DeleteInventoryResult>;
-  updateInventory: (command: UpdateInventoryCommand) => Promise<UpdateInventoryResult>;
+  deleteInventory: (
+    command: DeleteInventoryCommand,
+  ) => Promise<DeleteInventoryResult>;
+  updateInventory: (
+    command: UpdateInventoryCommand,
+  ) => Promise<UpdateInventoryResult>;
 };
 
 export function buildInventoryUses(): InventoryUses {
@@ -95,3 +99,5 @@ export function buildInventoryUses(): InventoryUses {
 }
 
 export const INVENTORY_KEY = 'Inventory' as const;
+
+//small change
