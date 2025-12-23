@@ -153,8 +153,9 @@ onMounted(() => fetchItems());
   padding: 0;
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 1.5rem;
+  /* Wider flexible columns; keeps equal 3rem gaps */
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 3rem;
 }
 .grid__item {
   display: block;
