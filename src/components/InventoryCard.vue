@@ -1,9 +1,27 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { Device } from '@/app/inventory-service';
 
-const props = defineProps<{ item: Device }>();
+const props = defineProps<{
+  item: Device;
+  showCount?: boolean;
+  showReserve?: boolean;
+  showEditAvailability?: boolean;
+  disableActions?: boolean;
+}>();
 
-const emit = defineEmits<{ edit: []; delete: [] }>();
+const emit = defineEmits<{
+  edit: [];
+  delete: [];
+  reserve: [];
+  'edit-availability': [];
+}>();
+
+const countLabel = computed(() => {
+  if (!props.showCount) return '—';
+  if (typeof props.item.count === 'number') return String(props.item.count);
+  return '—';
+});
 
 function formatDate(d: Date): string {
   try {
@@ -27,8 +45,8 @@ function formatDate(d: Date): string {
         <div class="card__title">{{ props.item.name }}</div>
         <p class="card__desc">{{ props.item.description }}</p>
       </div>
-      <div class="card__count">
-        <span class="count-badge">{{ props.item.count }}</span>
+      <div v-if="props.showCount" class="card__count">
+        <span class="count-badge">{{ countLabel }}</span>
         <span class="count-label">in stock</span>
       </div>
     </header>
@@ -40,8 +58,42 @@ function formatDate(d: Date): string {
         <span class="card__id">#{{ props.item.id }}</span>
       </div>
       <div class="card__actions">
-        <button @click="$emit('edit')" class="btn-icon" title="Edit device" aria-label="Edit">✏️</button>
-        <button @click="$emit('delete')" class="btn-icon btn-delete" title="Delete device" aria-label="Delete">🗑️</button>
+        <button
+          v-if="props.showReserve"
+          class="btn-pill"
+          :disabled="props.disableActions"
+          @click="$emit('reserve')"
+        >
+          Reserve
+        </button>
+        <button
+          v-if="props.showEditAvailability"
+          class="btn-pill btn--ghost"
+          :disabled="props.disableActions"
+          @click="$emit('edit-availability')"
+        >
+          Edit availability
+        </button>
+        <button
+          v-if="props.showEditAvailability"
+          @click="$emit('edit')"
+          class="btn-icon"
+          :disabled="props.disableActions"
+          title="Edit device"
+          aria-label="Edit"
+        >
+          ✏️
+        </button>
+        <button
+          v-if="props.showEditAvailability"
+          @click="$emit('delete')"
+          class="btn-icon btn-delete"
+          :disabled="props.disableActions"
+          title="Delete device"
+          aria-label="Delete"
+        >
+          🗑️
+        </button>
       </div>
     </footer>
   </article>
@@ -120,6 +172,7 @@ function formatDate(d: Date): string {
   display: flex;
   gap: 0.5rem;
   margin-left: auto;
+  flex-wrap: wrap;
 }
 .btn-icon {
   background: none;
@@ -136,5 +189,38 @@ function formatDate(d: Date): string {
 }
 .btn-delete:hover {
   color: #ef4444;
+}
+
+.btn-pill {
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #fff;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-pill:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.btn-pill:disabled,
+.btn-icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn--ghost {
+  background: transparent;
+  color: #2563eb;
+}
+
+.btn--ghost:hover {
+  background: rgba(37, 99, 235, 0.08);
 }
 </style>

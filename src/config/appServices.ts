@@ -22,28 +22,47 @@ import { seedItems } from '../seed/items';
 
 let _inventoryService: InventoryService | undefined;
 
+export type BuildInventoryUsesOptions = {
+  /** Optional override for API base URL. Falls back to env. */
+  apiBaseUrl?: string;
+  /** Optional provider for an access token to add to API calls. */
+  authTokenProvider?: () => Promise<string | null>;
+};
+
 // Env-controlled service selection for inventory
 // - VITE_INVENTORY_SERVICE: 'fake' | 'http' (optional)
 // - VITE_INVENTORY_BASE_URL: string (optional)
 // - VITE_USE_SEED_DATA: 'true' | 'false' (optional, defaults to false)
-function createInventoryServiceFromEnv(): InventoryService {
+function createInventoryServiceFromEnv(
+  options: BuildInventoryUsesOptions = {},
+): InventoryService {
   const env = import.meta.env as Record<string, string | undefined>;
   const kind = (env.VITE_INVENTORY_SERVICE || '').toLowerCase();
-  const baseUrl = env.VITE_INVENTORY_BASE_URL;
+  const baseUrl = options.apiBaseUrl || env.VITE_INVENTORY_BASE_URL;
   const useSeedData = env.VITE_USE_SEED_DATA === 'true';
 
   if (kind === 'fake') {
     return new FakeInventoryService(useSeedData ? seedItems : []);
   }
-  if (kind === 'http') return new HttpInventoryService({ baseUrl });
+  if (kind === 'http')
+    return new HttpInventoryService({
+      baseUrl,
+      authTokenProvider: options.authTokenProvider,
+    });
 
-  if (baseUrl) return new HttpInventoryService({ baseUrl });
+  if (baseUrl)
+    return new HttpInventoryService({
+      baseUrl,
+      authTokenProvider: options.authTokenProvider,
+    });
   return new FakeInventoryService(useSeedData ? seedItems : []);
 }
 
-export function getInventoryService(): InventoryService {
+export function getInventoryService(
+  options: BuildInventoryUsesOptions = {},
+): InventoryService {
   if (!_inventoryService) {
-    _inventoryService = createInventoryServiceFromEnv();
+    _inventoryService = createInventoryServiceFromEnv(options);
   }
   return _inventoryService;
 }
@@ -89,7 +108,11 @@ export type InventoryUses = {
   ) => Promise<UpdateInventoryResult>;
 };
 
-export function buildInventoryUses(): InventoryUses {
+export function buildInventoryUses(
+  options: BuildInventoryUsesOptions = {},
+): InventoryUses {
+  // Build with a service created using provided options so auth headers can flow through.
+  _inventoryService = createInventoryServiceFromEnv(options);
   return {
     listInventory: makeListInventory(),
     addInventory: makeAddInventory(),

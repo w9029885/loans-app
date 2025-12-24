@@ -2,7 +2,7 @@ export type Device = {
   readonly id: string;
   readonly name: string;
   readonly description: string;
-  readonly count: number;
+  readonly count?: number;
   readonly updatedAt: Date;
 };
 

@@ -32,12 +32,14 @@ export type HttpInventoryServiceOptions = {
   readonly baseUrl?: string;
   readonly http?: HttpClient;
   readonly headers?: Record<string, string>;
+  readonly authTokenProvider?: () => Promise<string | null>;
 };
 
 export class HttpInventoryService implements InventoryService {
   private readonly baseUrl?: string;
   private readonly http: HttpClient;
   private readonly headers: Record<string, string>;
+  private readonly authTokenProvider?: () => Promise<string | null>;
 
   constructor(options: HttpInventoryServiceOptions = {}) {
     this.baseUrl = options.baseUrl
@@ -49,12 +51,13 @@ export class HttpInventoryService implements InventoryService {
     const target: any = typeof window !== 'undefined' ? window : globalThis;
     this.http = (rawHttp as any).bind(target);
     this.headers = { ...(options.headers ?? {}) };
+    this.authTokenProvider = options.authTokenProvider;
   }
 
   async listInventoryItems(): Promise<ListDevicesOutput> {
     const res = await this.http(this.url('/api/devices'), {
       method: 'GET',
-      headers: this.mergeHeaders({ Accept: 'application/json' }),
+      headers: await this.authHeaders({ Accept: 'application/json' }),
     });
     await this.ensureOk(res);
     const body = (await this.parseJson(res)) as ListDevicesResponseDto;
@@ -76,7 +79,7 @@ export class HttpInventoryService implements InventoryService {
     const dto = toAddDeviceRequestDto(input);
     const res = await this.http(this.url('/api/devices'), {
       method: 'POST',
-      headers: this.mergeHeaders({
+      headers: await this.authHeaders({
         Accept: 'application/json',
         'Content-Type': 'application/json',
       }),
@@ -110,7 +113,7 @@ export class HttpInventoryService implements InventoryService {
     const dto = toUpdateDeviceRequestDto(input);
     const res = await this.http(this.url(`/api/devices/${encodeURIComponent(id)}`), {
       method: 'PATCH',
-      headers: this.mergeHeaders({
+      headers: await this.authHeaders({
         Accept: 'application/json',
         'Content-Type': 'application/json',
       }),
@@ -137,7 +140,7 @@ export class HttpInventoryService implements InventoryService {
   async deleteInventoryItem(id: string): Promise<void> {
     const res = await this.http(this.url(`/api/devices/${encodeURIComponent(id)}`), {
       method: 'DELETE',
-      headers: this.mergeHeaders({ Accept: 'application/json' }),
+      headers: await this.authHeaders({ Accept: 'application/json' }),
     });
     await this.ensureOk(res);
   }
@@ -150,6 +153,21 @@ export class HttpInventoryService implements InventoryService {
 
   private mergeHeaders(extra: Record<string, string>): Record<string, string> {
     return { ...this.headers, ...extra };
+  }
+
+  private async authHeaders(
+    extra: Record<string, string>,
+  ): Promise<Record<string, string>> {
+    const headers = this.mergeHeaders(extra);
+    if (this.authTokenProvider) {
+      try {
+        const token = await this.authTokenProvider();
+        if (token) headers.Authorization = `Bearer ${token}`;
+      } catch {
+        // Swallow token errors and proceed unauthenticated
+      }
+    }
+    return headers;
   }
 
   private async ensureOk(res: Response): Promise<void> {

@@ -1,10 +1,56 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, inject, onMounted, ref, watch } from 'vue';
+import { useAuth0 } from '@auth0/auth0-vue';
 import { useInventory } from '@/composables/use-inventory';
 import InventoryCard from '@/components/InventoryCard.vue';
 import AddInventoryForm from '@/components/AddInventoryForm.vue';
 import type { AddInventoryCommand } from '@/app/add-inventory';
 import type { Device } from '@/app/inventory-service';
+import type { AppConfig } from '@/config/appConfig';
+
+const config = inject<AppConfig>('appConfig');
+const rolesClaim = config?.auth0.rolesClaim || 'https://schemas.quickstarts/roles';
+
+const { isAuthenticated, isLoading, user, loginWithRedirect } = useAuth0();
+
+const normalizeStrings = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value.map(String).map((s) => s.trim()).filter(Boolean);
+  if (typeof value === 'string')
+    return value
+      .split(/\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  return [];
+};
+
+const roles = computed(() => {
+  const claims = user.value ?? {};
+  const fromClaim = (claims as any)[rolesClaim];
+  const fallback = (claims as any).roles;
+  return Array.from(new Set([...normalizeStrings(fromClaim), ...normalizeStrings(fallback)]));
+});
+
+const permissions = computed(() => {
+  const claims = user.value ?? {};
+  const perms = (claims as any).permissions ?? (claims as any).scope;
+  // permissions may already be space-separated; normalizeStrings splits for us
+  return normalizeStrings(perms);
+});
+
+const isStaff = computed(() => roles.value.includes('staff'));
+const isStudent = computed(() => roles.value.includes('student'));
+const canManage = computed(
+  () => isStaff.value || permissions.value.includes('write:devices'),
+);
+const canSeeCounts = computed(
+  () =>
+    canManage.value ||
+    isStudent.value ||
+    permissions.value.includes('read:devices'),
+);
+const canReserve = computed(
+  () => canSeeCounts.value || permissions.value.includes('reserve:devices'),
+);
 
 const {
   items,
@@ -25,6 +71,7 @@ const formRef = ref<InstanceType<typeof AddInventoryForm> | null>(null);
 const successMessage = ref<string | null>(null);
 
 const handleToggleForm = () => {
+  if (!canManage.value) return;
   showForm.value = !showForm.value;
   successMessage.value = null;
   if (!showForm.value && formRef.value) formRef.value.resetForm();
@@ -64,7 +111,7 @@ const handleEdit = async (item: Device) => {
   successMessage.value = null;
   const nextCountRaw = window.prompt(
     `Update stock count for “${item.name}”`,
-    String(item.count),
+    String(item.count ?? 0),
   );
   if (nextCountRaw === null) return;
   const nextCount = Number(nextCountRaw);
@@ -80,27 +127,60 @@ const handleEdit = async (item: Device) => {
   }
 };
 
+const handleReserve = (item: Device) => {
+  successMessage.value = `Reservation for “${item.name}” coming soon.`;
+  setTimeout(() => (successMessage.value = null), 2000);
+};
+
+const handleEditAvailability = (item: Device) => {
+  successMessage.value = `Availability editor for “${item.name}” coming soon.`;
+  setTimeout(() => (successMessage.value = null), 2000);
+};
+
 onMounted(() => fetchItems());
+
+watch([isAuthenticated, permissions, roles], () => {
+  // Re-fetch to get richer data when auth state changes
+  fetchItems();
+});
 </script>
 
 <template>
   <section class="page">
     <header class="page__header">
-      <h1>Inventory test cicd</h1>
-      <button
-        @click="handleToggleForm"
-        class="btn btn--add"
-        :disabled="loading"
-      >
-        {{ showForm ? 'Cancel' : '+ Add Item' }}
-      </button>
+      <div>
+        <p class="eyebrow">Campus device pool</p>
+        <h1>Device models</h1>
+        <p class="lede">
+          Browse available models. Sign in as a student to see availability or as
+          staff to manage stock.
+        </p>
+      </div>
+      <div class="header-actions">
+        <button
+          v-if="canManage"
+          @click="handleToggleForm"
+          class="btn btn--add"
+          :disabled="loading"
+        >
+          {{ showForm ? 'Cancel' : '+ Add model' }}
+        </button>
+        <button
+          v-else-if="!isAuthenticated && !isLoading"
+          class="btn btn--primary"
+          @click="loginWithRedirect()"
+        >
+          Sign in to manage
+        </button>
+      </div>
     </header>
+
     <div v-if="successMessage" class="success-message">
       {{ successMessage }}
     </div>
 
     <AddInventoryForm
-      v-if="showForm"
+      v-if="showForm && canManage"
       ref="formRef"
       :is-submitting="adding"
       :error="error"
@@ -109,8 +189,9 @@ onMounted(() => fetchItems());
     />
 
     <div v-if="!loading" class="page__meta" aria-live="polite">
-      <span v-if="totalCount > 0">{{ totalCount }} total</span>
-      <span v-else>None yet</span>
+      <span v-if="canSeeCounts && totalCount > 0">{{ totalCount }} total</span>
+      <span v-else-if="canSeeCounts">None yet</span>
+      <span v-else>Sign in to see availability</span>
     </div>
 
     <div v-if="loading" class="state">Loading…</div>
@@ -120,8 +201,14 @@ onMounted(() => fetchItems());
         <li v-for="i in items" :key="i.id" class="grid__item">
           <InventoryCard
             :item="i"
+            :show-count="canSeeCounts"
+            :show-reserve="canReserve && !canManage"
+            :show-edit-availability="canManage"
+            :disable-actions="deleting || updating"
             @delete="handleDelete(i)"
             @edit="handleEdit(i)"
+            @reserve="handleReserve(i)"
+            @edit-availability="handleEditAvailability(i)"
           />
         </li>
       </ul>
@@ -142,6 +229,23 @@ onMounted(() => fetchItems());
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 0.5rem;
+}
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin: 0 0 0.2rem;
+}
+.lede {
+  margin: 0.25rem 0 0;
+  color: #4b5563;
+  max-width: 520px;
+}
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
 }
 .page__meta {
   color: #6b7280;
@@ -185,6 +289,13 @@ onMounted(() => fetchItems());
 }
 .btn--add:hover:not(:disabled) {
   background-color: #2563eb;
+}
+.btn--primary {
+  background-color: #0ea5e9;
+  color: white;
+}
+.btn--primary:hover:not(:disabled) {
+  background-color: #0284c7;
 }
 .success-message {
   padding: 1rem;
