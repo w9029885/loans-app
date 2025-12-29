@@ -11,7 +11,8 @@ import type { AppConfig } from '@/config/appConfig';
 const config = inject<AppConfig>('appConfig');
 const rolesClaim = config?.auth0.rolesClaim || 'https://schemas.quickstarts/roles';
 
-const { isAuthenticated, isLoading, user, loginWithRedirect } = useAuth0();
+const { isAuthenticated, isLoading, user, loginWithRedirect, getAccessTokenSilently } =
+  useAuth0();
 
 const normalizeStrings = (value: unknown): string[] => {
   if (Array.isArray(value)) return value.map(String).map((s) => s.trim()).filter(Boolean);
@@ -23,18 +24,44 @@ const normalizeStrings = (value: unknown): string[] => {
   return [];
 };
 
+const tokenRoles = ref<string[]>([]);
+const tokenPermissions = ref<string[]>([]);
+
+const decodeJwtPayload = (token: string): Record<string, unknown> | undefined => {
+  const [, base64Payload] = token.split('.');
+  if (!base64Payload) return undefined;
+  const normalized = base64Payload.replace(/-/g, '+').replace(/_/g, '/');
+  const padded =
+    normalized.length % 4 === 0
+      ? normalized
+      : normalized + '='.repeat(4 - (normalized.length % 4));
+  try {
+    return JSON.parse(atob(padded)) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+};
+
 const roles = computed(() => {
   const claims = user.value ?? {};
   const fromClaim = (claims as any)[rolesClaim];
   const fallback = (claims as any).roles;
-  return Array.from(new Set([...normalizeStrings(fromClaim), ...normalizeStrings(fallback)]));
+  return Array.from(
+    new Set([
+      ...normalizeStrings(fromClaim),
+      ...normalizeStrings(fallback),
+      ...tokenRoles.value,
+    ]),
+  );
 });
 
 const permissions = computed(() => {
   const claims = user.value ?? {};
   const perms = (claims as any).permissions ?? (claims as any).scope;
   // permissions may already be space-separated; normalizeStrings splits for us
-  return normalizeStrings(perms);
+  return Array.from(
+    new Set([...normalizeStrings(perms), ...tokenPermissions.value]),
+  );
 });
 
 const isStaff = computed(() => roles.value.includes('staff'));
@@ -137,7 +164,35 @@ const handleEditAvailability = (item: Device) => {
   setTimeout(() => (successMessage.value = null), 2000);
 };
 
-onMounted(() => fetchItems());
+const loadAccessTokenClaims = async () => {
+  tokenPermissions.value = [];
+  tokenRoles.value = [];
+  if (!isAuthenticated.value) return;
+  try {
+    const token = await getAccessTokenSilently();
+    if (!token) return;
+    const payload = decodeJwtPayload(token);
+    if (!payload) return;
+    const perms = (payload as any).permissions ?? (payload as any).scope;
+    const fromClaim = (payload as any)[rolesClaim];
+    const fallback = (payload as any).roles;
+    tokenPermissions.value = normalizeStrings(perms);
+    tokenRoles.value = Array.from(
+      new Set([...normalizeStrings(fromClaim), ...normalizeStrings(fallback)]),
+    );
+  } catch (err) {
+    console.warn('Failed to decode access token claims', err);
+  }
+};
+
+onMounted(() => {
+  loadAccessTokenClaims();
+  fetchItems();
+});
+
+watch([isAuthenticated, user], () => {
+  loadAccessTokenClaims();
+});
 
 watch([isAuthenticated, permissions, roles], () => {
   // Re-fetch to get richer data when auth state changes
