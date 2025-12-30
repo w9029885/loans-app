@@ -39,6 +39,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Run unit tests with coverage
+        run: npm run test:coverage
+
       - name: Deploy to Azure Storage Static Website
         uses: azure/CLI@v2
         with:
