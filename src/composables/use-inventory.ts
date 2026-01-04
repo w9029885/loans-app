@@ -4,6 +4,7 @@ import type { Device } from '@/app/inventory-service';
 import type { AddInventoryCommand } from '@/app/add-inventory';
 import type { UpdateInventoryCommand } from '@/app/update-inventory';
 import type { DeleteInventoryCommand } from '@/app/delete-inventory';
+import { useTelemetry } from '@/composables/useTelemetry';
 
 export type UseInventory = {
   readonly items: Ref<readonly Device[]>;
@@ -22,6 +23,8 @@ export type UseInventory = {
 export function useInventory(): UseInventory {
   const uses = inject<InventoryUses>(INVENTORY_KEY);
   if (!uses) throw new Error('Inventory not provided');
+
+  const telemetry = useTelemetry();
 
   const items = ref<readonly Device[]>([]);
   const totalCount = ref(0);
@@ -49,6 +52,10 @@ export function useInventory(): UseInventory {
       error.value = e instanceof Error ? e.message : String(e);
       items.value = [];
       totalCount.value = 0;
+      telemetry.trackException(
+        e instanceof Error ? e : new Error(String(e)),
+        { operation: 'fetchItems' },
+      );
     } finally {
       loading.value = false;
     }
@@ -65,9 +72,16 @@ export function useInventory(): UseInventory {
         totalCount.value = Math.max(totalCount.value + 1, items.value.length);
       } else {
         error.value = result.errors.join('; ');
+        telemetry.trackEvent('inventory_add_failed_ui', {
+          errors: result.errors.join('; '),
+        });
       }
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e);
+      telemetry.trackException(
+        e instanceof Error ? e : new Error(String(e)),
+        { operation: 'addItem' },
+      );
     } finally {
       adding.value = false;
     }
@@ -85,9 +99,17 @@ export function useInventory(): UseInventory {
         );
       } else {
         error.value = result.errors.join('; ');
+        telemetry.trackEvent('inventory_update_failed_ui', {
+          errors: result.errors.join('; '),
+          id: command.id,
+        });
       }
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e);
+      telemetry.trackException(
+        e instanceof Error ? e : new Error(String(e)),
+        { operation: 'updateItem', id: command.id },
+      );
     } finally {
       updating.value = false;
     }
@@ -104,9 +126,17 @@ export function useInventory(): UseInventory {
         totalCount.value = Math.max(totalCount.value - 1, items.value.length);
       } else {
         error.value = result.errors.join('; ');
+        telemetry.trackEvent('inventory_delete_failed_ui', {
+          errors: result.errors.join('; '),
+          id: command.id,
+        });
       }
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e);
+      telemetry.trackException(
+        e instanceof Error ? e : new Error(String(e)),
+        { operation: 'deleteItem', id: command.id },
+      );
     } finally {
       deleting.value = false;
     }

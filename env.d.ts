@@ -15,6 +15,7 @@ interface ImportMetaEnv {
   readonly VITE_INVENTORY_SERVICE?: string;
   readonly VITE_INVENTORY_BASE_URL?: string;
   readonly VITE_USE_SEED_DATA?: string;
+  readonly VITE_APPINSIGHTS_CONNECTION_STRING?: string;
 }
 
 interface ImportMeta {

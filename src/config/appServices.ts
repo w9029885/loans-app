@@ -19,6 +19,7 @@ import type {
 import { FakeInventoryService } from '../infra/fake-inventory-service';
 import { HttpInventoryService } from '../infra/http-inventory-service';
 import { seedItems } from '../seed/items';
+import { useTelemetry } from '../composables/useTelemetry';
 
 let _inventoryService: InventoryService | undefined;
 
@@ -48,12 +49,14 @@ function createInventoryServiceFromEnv(
     return new HttpInventoryService({
       baseUrl,
       authTokenProvider: options.authTokenProvider,
+      telemetry: useTelemetry(),
     });
 
   if (baseUrl)
     return new HttpInventoryService({
       baseUrl,
       authTokenProvider: options.authTokenProvider,
+      telemetry: useTelemetry(),
     });
   return new FakeInventoryService(useSeedData ? seedItems : []);
 }

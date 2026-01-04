@@ -6,6 +6,7 @@ export interface AppConfig {
     audience?: string;
     rolesClaim?: string;
   };
+  appInsightsConnectionString?: string;
 }
 
 export function loadAppConfig(): AppConfig {
@@ -15,10 +16,12 @@ export function loadAppConfig(): AppConfig {
   const clientId = env.VITE_AUTH0_CLIENT_ID || '';
   const audience = env.VITE_AUTH0_AUDIENCE || undefined;
   const rolesClaim = env.VITE_AUTH0_ROLES_CLAIM || undefined;
+  const appInsightsConnectionString = env.VITE_APPINSIGHTS_CONNECTION_STRING || undefined;
 
   return {
     apiBaseUrl,
     auth0: { domain, clientId, audience, rolesClaim },
+    appInsightsConnectionString,
   };
 }
 
