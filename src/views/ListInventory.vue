@@ -2,6 +2,7 @@
 import { computed, inject, onMounted, ref, watch } from 'vue';
 import { useAuth0 } from '@auth0/auth0-vue';
 import { useInventory } from '@/composables/use-inventory';
+import { useReservations } from '@/composables/use-reservations';
 import InventoryCard from '@/components/InventoryCard.vue';
 import AddInventoryForm from '@/components/AddInventoryForm.vue';
 import type { AddInventoryCommand } from '@/app/add-inventory';
@@ -93,6 +94,28 @@ const {
   updateItem,
 } = useInventory();
 
+const {
+  items: reservationItems,
+  creating: reserving,
+  error: reservationError,
+  fetchItems: fetchReservations,
+  createItem: createReservation,
+} = useReservations();
+
+// Track device IDs that the user has active reservations for
+const reservedDeviceIds = computed(() => {
+  return new Set(
+    reservationItems.value
+      .filter(r => r.status === 'reserved' || r.status === 'collected')
+      .map(r => r.deviceModelId)
+  );
+});
+
+// Check if a device is already reserved by the current user
+const isDeviceReserved = (deviceId: string): boolean => {
+  return reservedDeviceIds.value.has(deviceId);
+};
+
 const showForm = ref(false);
 const formRef = ref<InstanceType<typeof AddInventoryForm> | null>(null);
 const successMessage = ref<string | null>(null);
@@ -154,9 +177,22 @@ const handleEdit = async (item: Device) => {
   }
 };
 
-const handleReserve = (item: Device) => {
-  successMessage.value = `Reservation for “${item.name}” coming soon.`;
-  setTimeout(() => (successMessage.value = null), 2000);
+const handleReserve = async (item: Device) => {
+  successMessage.value = null;
+  await createReservation({
+    deviceModelId: item.id,
+    deviceModelName: item.name,
+  });
+  if (!reservationError.value) {
+    // Refresh reservations to update the reserved state
+    await fetchReservations();
+    successMessage.value = `Reservation for "${item.name}" created successfully! Check "My Reservations" to view it.`;
+    setTimeout(() => (successMessage.value = null), 4000);
+  } else {
+    // Display reservation error
+    error.value = reservationError.value;
+    setTimeout(() => (error.value = null), 4000);
+  }
 };
 
 const handleEditAvailability = (item: Device) => {
@@ -186,16 +222,27 @@ const loadAccessTokenClaims = async () => {
 };
 
 onMounted(() => {
+  console.log('[ListInventory] onMounted - fetching items');
   loadAccessTokenClaims();
   fetchItems();
+  // Fetch user's reservations to track which devices they've reserved
+  if (isAuthenticated.value) {
+    fetchReservations();
+  }
 });
 
 watch([isAuthenticated, user], () => {
+  console.log('[ListInventory] Auth/user changed, reloading claims');
   loadAccessTokenClaims();
+  // Also refresh reservations when auth changes
+  if (isAuthenticated.value) {
+    fetchReservations();
+  }
 });
 
-watch([isAuthenticated, permissions, roles], () => {
+watch([isAuthenticated, permissions, roles], ([auth, perms, rls]) => {
   // Re-fetch to get richer data when auth state changes
+  console.log('[ListInventory] Auth state changed, re-fetching. isAuth:', auth, 'perms:', perms, 'roles:', rls);
   fetchItems();
 });
 </script>
@@ -260,6 +307,7 @@ watch([isAuthenticated, permissions, roles], () => {
             :show-reserve="canReserve && !canManage"
             :show-edit-availability="canManage"
             :disable-actions="deleting || updating"
+            :is-reserved="isDeviceReserved(i.id)"
             @delete="handleDelete(i)"
             @edit="handleEdit(i)"
             @reserve="handleReserve(i)"

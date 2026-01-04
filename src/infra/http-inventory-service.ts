@@ -269,10 +269,19 @@ export class HttpInventoryService implements InventoryService {
     if (this.authTokenProvider) {
       try {
         const token = await this.authTokenProvider();
-        if (token) headers.Authorization = `Bearer ${token}`;
-      } catch {
-        // Swallow token errors and proceed unauthenticated
+        if (token) {
+          headers.Authorization = `Bearer ${token}`;
+          console.log('[HttpInventoryService] Auth header attached, token length:', token.length);
+        } else {
+          console.log('[HttpInventoryService] No token returned from provider');
+        }
+      } catch (err: any) {
+        // Log token errors for debugging
+        console.warn('[HttpInventoryService] Failed to get auth token for API call:', err?.message || err);
+        // Still proceed unauthenticated - the API will return limited data
       }
+    } else {
+      console.log('[HttpInventoryService] No authTokenProvider configured');
     }
     return headers;
   }

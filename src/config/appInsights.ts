@@ -23,6 +23,11 @@ export function initializeAppInsights(): ApplicationInsights | null {
       enableCorsCorrelation: true,
       enableRequestHeaderTracking: true,
       enableResponseHeaderTracking: true,
+      // Exclude Auth0 domains from correlation headers to avoid CORS issues
+      correlationHeaderExcludedDomains: [
+        '*.auth0.com',
+        'auth-lab-ao01.uk.auth0.com',
+      ],
     },
   });
 

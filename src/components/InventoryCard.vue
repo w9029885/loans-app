@@ -8,6 +8,7 @@ const props = defineProps<{
   showReserve?: boolean;
   showEditAvailability?: boolean;
   disableActions?: boolean;
+  isReserved?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -61,10 +62,11 @@ function formatDate(d: Date): string {
         <button
           v-if="props.showReserve"
           class="btn-pill"
-          :disabled="props.disableActions"
+          :class="{ 'btn--reserved': props.isReserved }"
+          :disabled="props.disableActions || props.isReserved"
           @click="$emit('reserve')"
         >
-          Reserve
+          {{ props.isReserved ? 'Reserved' : 'Reserve' }}
         </button>
         <button
           v-if="props.showEditAvailability"
@@ -213,6 +215,18 @@ function formatDate(d: Date): string {
 .btn-icon:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.btn--reserved {
+  background: #9ca3af;
+  border-color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.btn--reserved:hover {
+  background: #9ca3af;
+  border-color: #9ca3af;
+  transform: none;
 }
 
 .btn--ghost {
