@@ -16,6 +16,7 @@ jobs:
 
     env:
       VITE_INVENTORY_BASE_URL: https://devices-dev-ao01-func.azurewebsites.net
+      VITE_RESERVATION_BASE_URL: https://reservations-dev-ao01-func.azurewebsites.net
       VITE_AUTH0_DOMAIN: ${{ secrets.VITE_AUTH0_DOMAIN }}
       VITE_AUTH0_CLIENT_ID: ${{ secrets.VITE_AUTH0_CLIENT_ID }}
       VITE_AUTH0_AUDIENCE: ${{ secrets.VITE_AUTH0_AUDIENCE }}
