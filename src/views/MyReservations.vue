@@ -312,6 +312,12 @@ const pageDescription = computed(() =>
                     {{ formatDate(r.createdAt) }}
                   </time>
                 </div>
+                <div v-if="r.collectedAt" class="detail-item">
+                  <span class="detail-label">Collected:</span>
+                  <time :dateTime="r.collectedAt.toISOString()">
+                    {{ formatDate(r.collectedAt) }}
+                  </time>
+                </div>
                 <div v-if="r.returnedAt" class="detail-item">
                   <span class="detail-label">Returned:</span>
                   <time :dateTime="r.returnedAt.toISOString()">

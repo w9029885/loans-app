@@ -9,6 +9,7 @@ const props = defineProps<{
   showEditAvailability?: boolean;
   disableActions?: boolean;
   isReserved?: boolean;
+  reservedStatus?: 'reserved' | 'collected';
 }>();
 
 const emit = defineEmits<{
@@ -66,7 +67,7 @@ function formatDate(d: Date): string {
           :disabled="props.disableActions || props.isReserved"
           @click="$emit('reserve')"
         >
-          {{ props.isReserved ? 'Reserved' : 'Reserve' }}
+          {{ props.isReserved ? (props.reservedStatus === 'collected' ? 'Collected' : 'Reserved') : 'Reserve' }}
         </button>
         <button
           v-if="props.showEditAvailability"

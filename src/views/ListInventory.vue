@@ -102,18 +102,24 @@ const {
   createItem: createReservation,
 } = useReservations();
 
-// Track device IDs that the user has active reservations for
-const reservedDeviceIds = computed(() => {
-  return new Set(
-    reservationItems.value
-      .filter(r => r.status === 'reserved' || r.status === 'collected')
-      .map(r => r.deviceModelId)
-  );
+const reservedStatusByDeviceId = computed(() => {
+  const map = new Map<string, 'reserved' | 'collected'>();
+  for (const reservation of reservationItems.value) {
+    if (reservation.status !== 'reserved' && reservation.status !== 'collected') continue;
+    const existing = map.get(reservation.deviceModelId);
+    if (existing === 'collected') continue;
+    map.set(reservation.deviceModelId, reservation.status);
+  }
+  return map;
 });
 
 // Check if a device is already reserved by the current user
 const isDeviceReserved = (deviceId: string): boolean => {
-  return reservedDeviceIds.value.has(deviceId);
+  return reservedStatusByDeviceId.value.has(deviceId);
+};
+
+const reservationStatusForDevice = (deviceId: string): 'reserved' | 'collected' | undefined => {
+  return reservedStatusByDeviceId.value.get(deviceId);
 };
 
 const showForm = ref(false);
@@ -308,6 +314,7 @@ watch([isAuthenticated, permissions, roles], ([auth, perms, rls]) => {
             :show-edit-availability="canManage"
             :disable-actions="deleting || updating"
             :is-reserved="isDeviceReserved(i.id)"
+            :reserved-status="reservationStatusForDevice(i.id)"
             @delete="handleDelete(i)"
             @edit="handleEdit(i)"
             @reserve="handleReserve(i)"
