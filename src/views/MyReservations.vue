@@ -210,7 +210,12 @@ const pageDescription = computed(() =>
 
     <div v-if="isAuthenticated">
       <div v-if="loading" class="state">Loading…</div>
-      <div v-else-if="error" class="state state--error">{{ error }}</div>
+      <div v-else-if="error" class="state state--error">
+        <p>{{ error }}</p>
+        <button class="btn btn--primary" @click="fetchItems()" :disabled="loading">
+          Try again
+        </button>
+      </div>
       <div v-else>
         <div v-if="activeReservations.length > 0" class="section">
           <h2 class="section-title">Active Reservations</h2>

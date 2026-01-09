@@ -6,6 +6,13 @@ import type {
   AddDeviceOutput,
 } from '../app/inventory-service';
 import type { Telemetry } from '../composables/useTelemetry';
+import {
+  computeBackoffDelayMs,
+  defaultRetryOptions,
+  isLikelyNetworkError,
+  isRetryableHttpStatus,
+  sleep,
+} from './retry';
 
 type DeviceDto = {
   id: string;
@@ -94,11 +101,71 @@ export class HttpInventoryService implements InventoryService {
     let success = false;
 
     try {
-      res = await this.http(url, {
-        method: 'GET',
-        headers: await this.authHeaders({ Accept: 'application/json' }),
-      });
-      await this.ensureOk(res);
+      const retry = defaultRetryOptions;
+      for (let attempt = 1; attempt <= retry.attempts; attempt++) {
+        try {
+          res = await this.http(url, {
+            method: 'GET',
+            headers: await this.authHeaders({ Accept: 'application/json' }),
+          });
+
+          if (!res.ok && isRetryableHttpStatus(res.status) && attempt < retry.attempts) {
+            const delayMs = computeBackoffDelayMs(
+              attempt - 1,
+              retry.baseDelayMs,
+              retry.maxDelayMs,
+            );
+            console.warn(
+              `[HttpInventoryService] listInventoryItems retrying (attempt ${attempt + 1}/${retry.attempts}) after ${delayMs}ms, status=${res.status}`,
+            );
+            this.trackEvent('inventory_fetch_retry', {
+              attempt,
+              nextAttempt: attempt + 1,
+              status: res.status,
+              delayMs,
+            });
+            await sleep(delayMs);
+            continue;
+          }
+
+          await this.ensureOk(res);
+          break;
+        } catch (err) {
+          if (attempt < retry.attempts && isLikelyNetworkError(err)) {
+            const delayMs = computeBackoffDelayMs(
+              attempt - 1,
+              retry.baseDelayMs,
+              retry.maxDelayMs,
+            );
+            console.warn(
+              `[HttpInventoryService] listInventoryItems retrying (attempt ${attempt + 1}/${retry.attempts}) after ${delayMs}ms (network error)`,
+              err,
+            );
+            this.trackEvent('inventory_fetch_retry', {
+              attempt,
+              nextAttempt: attempt + 1,
+              reason: 'network',
+              delayMs,
+            });
+            await sleep(delayMs);
+            continue;
+          }
+          throw err;
+        }
+      }
+
+      if (res && !res.ok && isRetryableHttpStatus(res.status)) {
+        throw new Error(
+          `Inventory service temporarily unavailable (${res.status}). Please try again in a moment.`,
+        );
+      }
+
+      if (!res) {
+        throw new Error(
+          'Inventory service temporarily unavailable. Please try again in a moment.',
+        );
+      }
+
       const body = (await this.parseJson(res)) as ListDevicesResponseDto;
 
       if (Array.isArray(body.errors) && body.errors.length) {

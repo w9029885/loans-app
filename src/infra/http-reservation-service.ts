@@ -9,6 +9,13 @@ import type {
   ReservationStatus,
 } from '../app/reservation-service';
 import type { Telemetry } from '../composables/useTelemetry';
+import {
+  computeBackoffDelayMs,
+  defaultRetryOptions,
+  isLikelyNetworkError,
+  isRetryableHttpStatus,
+  sleep,
+} from './retry';
 
 export type HttpReservationServiceOptions = {
   /** Base URL for the reservations API, e.g. http://localhost:7072 */
@@ -34,6 +41,10 @@ export class HttpReservationService implements ReservationService {
     if (!this.telemetry) return;
     const error = err instanceof Error ? err : new Error(String(err));
     this.telemetry.trackException(error, context);
+  }
+
+  private trackEvent(name: string, properties?: Record<string, any>): void {
+    this.telemetry?.trackEvent(name, properties);
   }
 
   private async getHeaders(): Promise<HeadersInit> {
@@ -69,31 +80,86 @@ export class HttpReservationService implements ReservationService {
   }
 
   async listReservations(statusFilter?: ReservationStatus[]): Promise<ListReservationsOutput> {
+    const retry = defaultRetryOptions;
+    let lastRes: Response | undefined;
     try {
       const url = new URL('api/reservations', this.baseUrl);
       if (statusFilter && statusFilter.length > 0) {
         url.searchParams.set('status', statusFilter.join(','));
       }
-      
-      const headers = await this.getHeaders();
-      const res = await fetch(url.toString(), {
-        method: 'GET',
-        headers,
-      });
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        const message = errorData?.error?.message || `${res.status} ${res.statusText}`;
-        throw new Error(`Failed to list reservations: ${message}`);
+      const headers = await this.getHeaders();
+      for (let attempt = 1; attempt <= retry.attempts; attempt++) {
+        try {
+          lastRes = await fetch(url.toString(), {
+            method: 'GET',
+            headers,
+          });
+
+          if (!lastRes.ok && isRetryableHttpStatus(lastRes.status) && attempt < retry.attempts) {
+            const delayMs = computeBackoffDelayMs(
+              attempt - 1,
+              retry.baseDelayMs,
+              retry.maxDelayMs,
+            );
+            console.warn(
+              `[HttpReservationService] listReservations retrying (attempt ${attempt + 1}/${retry.attempts}) after ${delayMs}ms, status=${lastRes.status}`,
+            );
+            this.trackEvent('reservations_fetch_retry', {
+              attempt,
+              nextAttempt: attempt + 1,
+              status: lastRes.status,
+              delayMs,
+            });
+            await sleep(delayMs);
+            continue;
+          }
+
+          if (!lastRes.ok) {
+            const errorData = await lastRes.json().catch(() => ({}));
+            const message = errorData?.error?.message || `${lastRes.status} ${lastRes.statusText}`;
+            throw new Error(`Failed to list reservations: ${message}`);
+          }
+
+          const data = await lastRes.json();
+          const items = Array.isArray(data)
+            ? data.map((item) => this.parseReservation(item))
+            : [];
+          return {
+            items,
+            totalCount: items.length,
+          };
+        } catch (err) {
+          if (attempt < retry.attempts && isLikelyNetworkError(err)) {
+            const delayMs = computeBackoffDelayMs(
+              attempt - 1,
+              retry.baseDelayMs,
+              retry.maxDelayMs,
+            );
+            console.warn(
+              `[HttpReservationService] listReservations retrying (attempt ${attempt + 1}/${retry.attempts}) after ${delayMs}ms (network error)`,
+              err,
+            );
+            this.trackEvent('reservations_fetch_retry', {
+              attempt,
+              nextAttempt: attempt + 1,
+              reason: 'network',
+              delayMs,
+            });
+            await sleep(delayMs);
+            continue;
+          }
+          throw err;
+        }
       }
 
-      const data = await res.json();
-      const items = Array.isArray(data) ? data.map(item => this.parseReservation(item)) : [];
-      
-      return {
-        items,
-        totalCount: items.length,
-      };
+      if (lastRes && !lastRes.ok && isRetryableHttpStatus(lastRes.status)) {
+        throw new Error(
+          `Reservations service temporarily unavailable (${lastRes.status}). Please try again in a moment.`,
+        );
+      }
+
+      throw new Error('Failed to list reservations');
     } catch (err) {
       this.trackException(err, { operation: 'listReservations' });
       throw err;

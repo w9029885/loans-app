@@ -303,7 +303,12 @@ watch([isAuthenticated, permissions, roles], ([auth, perms, rls]) => {
     </div>
 
     <div v-if="loading" class="state">Loading…</div>
-    <div v-else-if="error" class="state state--error">{{ error }}</div>
+    <div v-else-if="error" class="state state--error">
+      <p>{{ error }}</p>
+      <button class="btn btn--primary" @click="fetchItems" :disabled="loading">
+        Try again
+      </button>
+    </div>
     <div v-else>
       <ul v-if="items.length" class="grid" role="list">
         <li v-for="i in items" :key="i.id" class="grid__item">

@@ -176,7 +176,12 @@ watch([isAuthenticated, isStaff, filterStatus], () => {
       </div>
 
       <div v-if="loading" class="state">Loading…</div>
-      <div v-else-if="error" class="state state--error">{{ error }}</div>
+      <div v-else-if="error" class="state state--error">
+        <p>{{ error }}</p>
+        <button class="btn btn--primary" @click="loadReservations" :disabled="loading">
+          Try again
+        </button>
+      </div>
       <div v-else>
         <p v-if="filteredReservations.length === 0" class="state">
           No reservations found.
