@@ -26,7 +26,9 @@ describe('appConfig & buildAuth0Options', () => {
     expect(opts.domain).toBe(appConfig.auth0.domain);
     expect(opts.clientId).toBe(appConfig.auth0.clientId);
     expect(opts.authorizationParams.redirect_uri).toBe('http://localhost');
-    expect(opts.authorizationParams.scope).toContain('write:devices');
+    expect(opts.authorizationParams.scope).toContain('openid');
+    expect(opts.authorizationParams.scope).toContain('profile');
+    expect(opts.authorizationParams.scope).toContain('email');
     expect(opts.cacheLocation).toBe('localstorage');
   });
 });
