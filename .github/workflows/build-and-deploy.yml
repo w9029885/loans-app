@@ -1,4 +1,4 @@
-name: Build and Deploy to Dev
+name: Build and Deploy
 
 on:
   push:
@@ -11,8 +11,32 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run type check
+        run: npm run type-check
+
+      - name: Run unit tests with coverage
+        run: npm run test:coverage
+
+  deploy-to-dev:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    environment: dev
 
     env:
       VITE_INVENTORY_BASE_URL: https://devices-dev-ao01-func.azurewebsites.net
@@ -36,20 +60,54 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run type check
-        run: npm run type-check
-
-      - name: Build
+      - name: Build for Dev
         run: npm run build
 
-      - name: Run unit tests with coverage
-        run: npm run test:coverage
-
-      - name: Deploy to Azure Storage Static Website
+      - name: Deploy to Azure Storage Static Website (Dev)
         uses: azure/CLI@v2
         with:
           inlineScript: |
-            # Deploys to loansdevao01appstore static website ($web container)
+            az storage blob upload-batch \
+              --connection-string "${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}" \
+              --destination '$web' \
+              --source dist \
+              --overwrite true
+
+  deploy-to-prod:
+    needs: deploy-to-dev
+    runs-on: ubuntu-latest
+    environment: prod
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    env:
+      VITE_INVENTORY_BASE_URL: https://devices-prod-ao01-func.azurewebsites.net
+      VITE_RESERVATION_BASE_URL: https://reservations-prod-ao01-func.azurewebsites.net
+      VITE_AUTH0_DOMAIN: ${{ secrets.VITE_AUTH0_DOMAIN }}
+      VITE_AUTH0_CLIENT_ID: ${{ secrets.VITE_AUTH0_CLIENT_ID }}
+      VITE_AUTH0_AUDIENCE: ${{ secrets.VITE_AUTH0_AUDIENCE }}
+      VITE_AUTH0_ROLES_CLAIM: https://loans.devices.ao01.com/roles
+      VITE_APPINSIGHTS_CONNECTION_STRING: ${{ secrets.VITE_APPINSIGHTS_CONNECTION_STRING }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build for Production
+        run: npm run build
+
+      - name: Deploy to Azure Storage Static Website (Production)
+        uses: azure/CLI@v2
+        with:
+          inlineScript: |
             az storage blob upload-batch \
               --connection-string "${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}" \
               --destination '$web' \
