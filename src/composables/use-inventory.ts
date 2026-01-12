@@ -49,7 +49,7 @@ export function useInventory(): UseInventory {
         totalCount.value = 0;
       }
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e);
+      error.value = 'Failed to retrieve devices';
       items.value = [];
       totalCount.value = 0;
       telemetry.trackException(
