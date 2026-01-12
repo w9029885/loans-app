@@ -258,7 +258,7 @@ watch([isAuthenticated, permissions, roles], ([auth, perms, rls]) => {
     <header class="page__header">
       <div>
         <p class="eyebrow">Campus device pool</p>
-        <h1>Device models</h1>
+        <h1>Test cicd</h1>
         <p class="lede">
           Browse available models. Sign in as a student to see availability or as
           staff to manage stock.
