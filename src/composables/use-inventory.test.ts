@@ -88,7 +88,7 @@ describe('useInventory', () => {
     const inv = useInventory();
     await inv.fetchItems();
 
-    expect(inv.error.value).toBe('network down');
+    expect(inv.error.value).toBe('Failed to retrieve devices');
     expect(inv.items.value).toEqual([]);
     expect(inv.totalCount.value).toBe(0);
   });
